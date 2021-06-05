@@ -50,13 +50,16 @@ def show_images(images, titles=None):
 def preprocess_image(img, feature_extraction_method=OVERLAPPING_METHOD):
     if feature_extraction_method == OVERLAPPING_METHOD:
         img_copy = img.copy()
+
         if len(img.shape) > 2:
             img_copy = cv2.cvtColor(img_copy, cv2.COLOR_BGR2GRAY)  # conversion to the other color space(gray)
         img_copy = cv2.medianBlur(img_copy, 5)  #(reduce noise) non-linear technique takes a median of all the pixels under the kernel area and replaces the central element with this median value.
+        show_images([img, img_copy])
         img_copy = cv2.threshold(img_copy, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)[1]# progowanie ale trza sprawdzić jakie konkretnie
-
-        min_vertical, max_vertical = get_corpus_boundaries(img_copy)#cut edges of image
-        img_copy = img_copy[min_vertical:max_vertical]
+        show_images([img, img_copy])
+        min_vertical, max_vertical = get_corpus_boundaries(img_copy)
+        img_copy = img_copy[min_vertical:max_vertical]#cut edges of image to handwriten part
+        show_images([img, img_copy],['img','scope'])
         return img_copy
 
     if feature_extraction_method == LINES_METHOD:
@@ -66,6 +69,7 @@ def preprocess_image(img, feature_extraction_method=OVERLAPPING_METHOD):
         else:
             grayscale_img = img.copy()
         img_copy = cv2.threshold(grayscale_img, 127, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)[1]
+
         min_vertical, max_vertical = get_corpus_boundaries(img_copy)
         img_copy = img_copy[min_vertical:max_vertical]
         grayscale_img = grayscale_img[min_vertical:max_vertical]
@@ -76,27 +80,33 @@ def preprocess_image(img, feature_extraction_method=OVERLAPPING_METHOD):
 
 def get_corpus_boundaries(img):
     crop = []
-    horizontal_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (100, 1))# it makes image where all places with leters are marked
+    horizontal_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (100, 1))# it mark places where horizontal lines
+    show_images([img, horizontal_kernel],['img','horiz'])
     detect_horizontal = cv2.morphologyEx(img, cv2.MORPH_OPEN, horizontal_kernel, iterations=2)#Opening is just another name of erosion followed by dilation. It is useful in removing noise.
+    show_images([img, detect_horizontal],['img','detect'] )
     contours = cv2.findContours(detect_horizontal, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)#marked contours of edges| returns 2 or 3 values
+    # show_images([img, contours],['img','cont'])
     contours = contours[0] if len(contours) == 2 else contours[1]
     prev = -1
+
     for i, c in enumerate(contours):
         if np.abs(prev - int(c[0][0][1])) > 800 or prev == -1:
             crop.append(int(c[0][0][1]))
             prev = int(c[0][0][1])
+    print(crop)
     crop.sort()
     max_vertical = crop[1] - 20
     min_vertical = crop[0] + 20
     return min_vertical, max_vertical
 
 
-def segment_image(img, num, grayscale_img=None):
+def segment_image(img, num, grayscale_img=None): #image,3
     if grayscale_img is not None:
         grayscale_images = []
         img_copy = np.copy(img)
         kernel = np.ones((1, num))
         img_copy = binary_dilation(img_copy, kernel)
+        show_images([img, img_copy],['img', 'binary_dilation'])
         bounding_boxes = find_contours(img_copy, 0.8)
         for box in bounding_boxes:
             x_min = int(np.min(box[:, 1]))
@@ -108,16 +118,21 @@ def segment_image(img, num, grayscale_img=None):
         return grayscale_images
     images = []
     img_copy = np.copy(img)
-    kernel = np.ones((1, num))
-    img_copy = binary_dilation(img_copy, kernel)
-    bounding_boxes = find_contours(img_copy, 0.8)
-    for box in bounding_boxes:
+    kernel = np.ones((1, num))  # array 1 x num
+    img_copy = binary_dilation(img_copy, kernel)#array of bools
+    show_images([img, img_copy], ['img', 'binary_dilation'])
+    bounding_boxes = find_contours(img_copy, 0.8) #0.8- Value along which to find contours in the array.
+    # show_images([img, bounding_boxes], ['img', 'bounding_boxes'])
+
+    for box in bounding_boxes:  #extract infividual lettera or words
         x_min = int(np.min(box[:, 1]))
         x_max = int(np.max(box[:, 1]))
         y_min = int(np.min(box[:, 0]))
         y_max = int(np.max(box[:, 0]))
         if (y_max - y_min) > 10 and (x_max - x_min) > 10:
             images.append(img[y_min:y_max, x_min:x_max])
+    show_images(images[:5])
+
     return images
 
 
@@ -309,8 +324,10 @@ def extract_features(images, labels, feature_extraction_method=OVERLAPPING_METHO
         textures = []
         textures_labels = []
         for image, label in zip(images, labels):
-            image = preprocess_image(image)
+            image = preprocess_image(image)# only handwriten part
+            print("dupa1")
             words = segment_image(image, 3)
+            print('dupa2')
             avg_height = 0
             for word in words:
                 avg_height += word.shape[0] / len(words)
@@ -332,6 +349,7 @@ total_execution_time = 0
 for epoch in range(epochs):
     images, labels, test_image, test_label = read_random_images(root)  # choice learning set and test set
     start_time = time.time()
+    # show_images(images)
     features, features_labels = extract_features(images, labels, feature_extraction_method)
     model = model_generator(features, features_labels, feature_extraction_method, classifier_type)
     prediction = predict(model, test_image, feature_extraction_method, classifier_type)
