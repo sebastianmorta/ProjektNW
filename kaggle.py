@@ -119,12 +119,18 @@ def segment_image(img, num, grayscale_img=None): #image,3
     images = []
     img_copy = np.copy(img)
     kernel = np.ones((1, num))  # array 1 x num
+    print("img",img_copy)
     img_copy = binary_dilation(img_copy, kernel)#array of bools
     show_images([img, img_copy], ['img', 'binary_dilation'])
-    bounding_boxes = find_contours(img_copy, 0.8) #0.8- Value along which to find contours in the array.
+    print("img2",img_copy)
+    bounding_boxes = find_contours(img_copy, 0.8) #0.8- Value along which to find contours in the array. trza doczytać jak dokładnie działa
     # show_images([img, bounding_boxes], ['img', 'bounding_boxes'])
-
-    for box in bounding_boxes:  #extract infividual lettera or words
+    # print('box',bounding_boxes)
+    print('len',len(bounding_boxes))
+    for box in bounding_boxes:  #extract individual letters or words
+        # z = np.array(box)
+        # print('shape',z.shape)
+        # print("box", box)
         x_min = int(np.min(box[:, 1]))
         x_max = int(np.max(box[:, 1]))
         y_min = int(np.min(box[:, 0]))
@@ -132,6 +138,10 @@ def segment_image(img, num, grayscale_img=None): #image,3
         if (y_max - y_min) > 10 and (x_max - x_min) > 10:
             images.append(img[y_min:y_max, x_min:x_max])
     show_images(images[:5])
+    print('shape',images[0])
+    print('shapex',images[0][1].shape)
+    print('shapey',images[0].shape)
+    print('shape[1]',images[0].shape[1])
 
     return images
 
@@ -326,11 +336,12 @@ def extract_features(images, labels, feature_extraction_method=OVERLAPPING_METHO
         for image, label in zip(images, labels):
             image = preprocess_image(image)# only handwriten part
             print("dupa1")
-            words = segment_image(image, 3)
+            words = segment_image(image, 3)#images of words or letters
             print('dupa2')
             avg_height = 0
             for word in words:
-                avg_height += word.shape[0] / len(words)
+                avg_height += word.shape[0] / len(words)# average height of letters
+            print('averageheight', avg_height)
             overlapped_img = overlap_words(words, avg_height)
             new_textures = get_textures(overlapped_img)
             textures.append(new_textures)
